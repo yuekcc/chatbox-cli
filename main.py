@@ -16,7 +16,7 @@ api_key = "sk-3412"
 
 
 async def process_query(query):
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(http2=True, timeout=300) as client:
         full_response = ""
         reasoning_contents = []
         answer_contents = []
@@ -29,16 +29,18 @@ async def process_query(query):
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
+                "Connection": "keep-alive",
             },
             json={
-                "model": GLM_Z1,
+                "model": QWEN3,
                 "messages": [
                     {"role": "system", "content": "answer in 中文"},
                     {"role": "user", "content": query},
                 ],
+                "temperature": 0.6,
+                "top_p": 1,
                 "stream": True,
             },
-            timeout=30,
         ) as response:
             async for chunk in response.aiter_text():
                 if not chunk:
