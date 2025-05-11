@@ -1,0 +1,9 @@
+[project]
+name = "chatbox-cli"
+version = "0.1.0"
+description = "Chatbox in CLI"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+]
