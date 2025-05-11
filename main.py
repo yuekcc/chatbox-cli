@@ -156,10 +156,9 @@ async def chat_loop():
     print("Type your queries or '/q' to exit.")
     print(f"Using {config['model']}.\n")
 
-    prompt_session = PromptSession()
-
     while True:
         try:
+            prompt_session = PromptSession()
             with patch_stdout():
                 query = await prompt_session.prompt_async("Query: ")
 
@@ -170,7 +169,7 @@ async def chat_loop():
 
             answer_contents, reasoning_contents, _ = await process_query(query)
             dump_messages(query, answer_contents, reasoning_contents)
-            print("")
+            print("\n")
         except Exception as ex:
             print(f"\nError: {str(ex)}")
             exit(1)
