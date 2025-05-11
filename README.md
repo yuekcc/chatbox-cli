@@ -14,8 +14,11 @@ uv run main.py
 ## Roadmap
 
 - [x] LLM 基本支持
-- [ ] 命令 `/q` `/quit` 退出
-- [ ] 命令 `/model xxx` 切换模型
+- [x] 命令 `/q` `/quit` 退出
+- [x] 命令 `/m xxx` 切换模型
+    - [x] `/m qwen2.5`
+    - [x] `/m qwen3`
+    - [x] `/m glm_z1`
 - [ ] 命令 `/agent xxx` 切换通知本
 - [ ] MCP 支持
 
