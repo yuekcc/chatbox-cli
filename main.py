@@ -24,6 +24,8 @@ config = {
     "top_p": 1,
 }
 
+MEMORY = []
+
 SCRIPT_PATH = Path(__file__)
 SCRIPT_DIR = SCRIPT_PATH.parent
 
@@ -32,12 +34,29 @@ def get_current_datetime(format="%Y%m%d%H%M%S"):
     return datetime.now().strftime(format)
 
 
-def get_system_prompt():
+def get_base_system_prompt():
     current_date = get_current_datetime("%Y-%m-%d")
-    return f"You are a helpful assistant. Please reply in 中文. Current date is {current_date}"
+    return f"Current model: {config['model']}\nCurrent date: {current_date}\nUsing 简体中文"
+
+
+def get_system_prompt():
+    return f"{get_base_system_prompt()}\n\nYou are a helpful assistant. "
+
+
+def get_models():
+    return "\n".join(
+        [
+            "当前可用模型有：",
+            f"{QWEN3} (id=qwen3)",
+            f"{QWEN2_5} (id=qwen2.5)",
+            f"{GLM_Z1} (id=glm_z1)",
+        ]
+    )
 
 
 async def process_query(query):
+    global MEMORY
+
     async with httpx.AsyncClient(http2=True, timeout=300) as client:
         full_response = ""
         reasoning_contents = []
@@ -51,9 +70,12 @@ async def process_query(query):
         ]
         messages.append({"role": "user", "content": query})
 
+        # 添加记忆
+        MEMORY = MEMORY + messages
+
         async with client.stream(
             "POST",
-            "http://localhost:10000/chat/completions",
+            "http://localhost:10000/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {API_KEY}",
                 "Content-Type": "application/json",
@@ -108,6 +130,9 @@ async def process_query(query):
                     except Exception as ex:
                         print(f"\nError: {str(ex)}")
 
+        MEMORY.append(
+            {"role": "assistant", "content": "".join(answer_contents).strip()}
+        )
         return answer_contents, reasoning_contents, full_response
 
 
@@ -125,24 +150,36 @@ def dump_messages(query, answer_contents, reasoning_contents):
         if len(reasoning) > 0:
             buf.append(f"{THINK_START}{reasoning}{THINK_END}")
         buf.append("".join(answer_contents))
+        buf.append("----")
 
         f.write("\n\n".join(buf))
 
 
 async def handle_system_command(query):
-    if query.lower() == "/quit" or query.lower() == "/q":
+    global MEMORY
+
+    cmd_line = query.lower()
+
+    if cmd_line == "/q":
         exit(0)
-    elif query.lower() == "/m qwen2.5":
+    elif cmd_line == "/r":
+        MEMORY = []
+        print("[System] clean memory")
+        return True
+    elif cmd_line == "/m qwen2.5":
         config["model"] = QWEN2_5
         print(f"[System] using model {QWEN2_5}")
         return True
-    elif query.lower() == "/m qwen3":
+    elif cmd_line == "/m qwen3":
         config["model"] = QWEN3
         print(f"[System] using model {QWEN3}")
         return True
-    elif query.lower() == "/m glm_z1":
+    elif cmd_line == "/m glm_z1":
         config["model"] = GLM_Z1
         print(f"[System] using model {GLM_Z1}")
+        return True
+    elif cmd_line == "/m" or cmd_line == "/m list":
+        print(f"[System] {get_models()}")
         return True
 
     return False
@@ -165,13 +202,17 @@ async def chat_loop():
             query = query.strip()
             parsed = await handle_system_command(query)
             if parsed:
+                print("----\n")
                 continue
 
             answer_contents, reasoning_contents, _ = await process_query(query)
             dump_messages(query, answer_contents, reasoning_contents)
-            print("\n")
+
+            # LLM 输出的最后没有换行，手工补充换行
+            print("\n----")
+            print(f"[System] Memory size is {len(MEMORY)}\n")
         except Exception as ex:
-            print(f"\nError: {str(ex)}")
+            print(f"[System] Error: {str(ex)}")
             exit(1)
 
 
