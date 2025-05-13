@@ -62,6 +62,18 @@ def get_models():
     return "\n".join(msgs)
 
 
+def remove_reasoning(messages):
+    result = []
+    for msg in messages:
+        result.append(
+            {
+                "role": msg["role"],
+                "content": msg["content"],
+            }
+        )
+    return result
+
+
 async def process_query(query):
     global MEMORY
     global CONFIG
@@ -91,7 +103,7 @@ async def process_query(query):
             "Content-Type": "application/json",
         }
         body = {
-            "messages": messages,
+            "messages": remove_reasoning(MEMORY),
             "model": runtime_config["model"],
             "temperature": runtime_config["temperature"],
             "top_p": runtime_config["top_p"],
@@ -147,12 +159,16 @@ async def process_query(query):
                         print(f"\nError: {str(ex)}")
 
         MEMORY.append(
-            {"role": "assistant", "content": "".join(answer_contents).strip()}
+            {
+                "role": "assistant",
+                "content": "".join(answer_contents).strip(),
+                "reasoning_content": "".join(reasoning_contents),
+            }
         )
         return answer_contents, reasoning_contents, full_response
 
 
-def dump_messages(query, answer_contents, reasoning_contents):
+def dump_messages():
     global runtime_config
 
     if runtime_config["history_file"] == "":
@@ -162,18 +178,15 @@ def dump_messages(query, answer_contents, reasoning_contents):
 
     with open(runtime_config["history_file"], "a", encoding="utf-8") as f:
         buf = []
-        buf.append(
-            f"----\nmodel: {runtime_config['model']}\ntemperature: {runtime_config['temperature']}\ntop_p: {runtime_config['top_p']}\n----"
-        )
-        buf.append("## User")
-        buf.append(query)
-        buf.append("## Assistant")
+        # buf.append(
+        #     f"----\nmodel: {runtime_config['model']}\ntemperature: {runtime_config['temperature']}\ntop_p: {runtime_config['top_p']}\n----"
+        # )
 
-        reasoning = "".join(reasoning_contents)
-        if len(reasoning) > 0:
-            buf.append(f"{THINK_START}{reasoning}{THINK_END}")
-        buf.append("".join(answer_contents))
-        buf.append("----")
+        for msg in MEMORY:
+            buf.append(f"## {msg['role']}")
+            if "reasoning_content" in msg and msg["reasoning_content"]:
+                buf.append(f"{THINK_START}{msg['reasoning_content']}{THINK_END}")
+            buf.append(msg["content"])
 
         f.write("\n\n".join(buf))
 
@@ -238,8 +251,8 @@ async def chat_loop():
                 print("----\n")
                 continue
 
-            answer_contents, reasoning_contents, _ = await process_query(query)
-            dump_messages(query, answer_contents, reasoning_contents)
+            await process_query(query)
+            dump_messages()
 
             # LLM 输出的最后没有换行，手工补充换行
             print("\n----")
