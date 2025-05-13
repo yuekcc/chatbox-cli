@@ -1,7 +1,7 @@
 [project]
-name = "chatbox-cli"
+name = "lyseya"
 version = "0.1.0"
-description = "Chatbox in CLI"
+description = "Local first chat box"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

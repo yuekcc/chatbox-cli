@@ -1,33 +1,42 @@
 import asyncio
 import json
-import sys
+import tomllib
+import os
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 
 import httpx
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 
-QWEN3 = "Qwen/Qwen3-8B"
-QWEN2_5 = "Qwen/Qwen2.5-7B-Instruct"
-GLM_Z1 = "THUDM/GLM-Z1-9B-0414"
+SCRIPT_PATH = Path(__file__)
+SCRIPT_DIR = SCRIPT_PATH.parent
+CONFIG_PATH = SCRIPT_DIR.joinpath("config.toml")
+
 
 THINK_START = "<think>\n"
 THINK_END = "</think>\n"
 
-API_KEY = "sk-3412"
-
-# TODO 支持配置持久化
-config = {
-    "model": QWEN2_5,
+# 静态配置
+CONFIG = {
+    "models": [],
     "temperature": 0.6,
     "top_p": 1,
+    "api_key": "",
+    "openai_endpoint": "",
+}
+
+runtime_config = {
+    "model": "",
+    "temperature": 0.6,
+    "top_p": 1,
+    "api_key": "",
+    "openai_endpoint": "",
+    "history_file": "",
 }
 
 MEMORY = []
-
-SCRIPT_PATH = Path(__file__)
-SCRIPT_DIR = SCRIPT_PATH.parent
 
 
 def get_current_datetime(format="%Y%m%d%H%M%S"):
@@ -36,7 +45,7 @@ def get_current_datetime(format="%Y%m%d%H%M%S"):
 
 def get_base_system_prompt():
     current_date = get_current_datetime("%Y-%m-%d")
-    return f"Current model: {config['model']}\nCurrent date: {current_date}\nUsing 简体中文"
+    return f"Current model: {runtime_config['model']}\nCurrent date: {current_date}\nUsing 简体中文"
 
 
 def get_system_prompt():
@@ -44,18 +53,19 @@ def get_system_prompt():
 
 
 def get_models():
-    return "\n".join(
-        [
-            "当前可用模型有：",
-            f"{QWEN3} (id=qwen3)",
-            f"{QWEN2_5} (id=qwen2.5)",
-            f"{GLM_Z1} (id=glm_z1)",
-        ]
-    )
+    global CONFIG
+
+    msgs = ["当前可用模型有："]
+    for x in CONFIG["models"]:
+        msgs.append(f"{x['id']} (id={x['name']})")
+
+    return "\n".join(msgs)
 
 
 async def process_query(query):
     global MEMORY
+    global CONFIG
+    global runtime_config
 
     async with httpx.AsyncClient(http2=True, timeout=300) as client:
         full_response = ""
@@ -74,20 +84,25 @@ async def process_query(query):
         # 添加记忆
         MEMORY = MEMORY + messages
 
+        api_url = f"{runtime_config['openai_endpoint']}/v1/chat/completions"
+        api_key = runtime_config["api_key"]
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        body = {
+            "messages": messages,
+            "model": runtime_config["model"],
+            "temperature": runtime_config["temperature"],
+            "top_p": runtime_config["top_p"],
+            "stream": True,
+        }
+
         async with client.stream(
             "POST",
-            "http://localhost:10000/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "messages": messages,
-                "model": config["model"],
-                "temperature": config["temperature"],
-                "top_p": config["top_p"],
-                "stream": True,
-            },
+            api_url,
+            headers=headers,
+            json=body,
         ) as response:
             async for chunk in response.aiter_text():
                 if not chunk:
@@ -138,11 +153,18 @@ async def process_query(query):
 
 
 def dump_messages(query, answer_contents, reasoning_contents):
-    history_file_name = (
-        f"{SCRIPT_DIR}/history/history-{get_current_datetime('%Y%m%d')}.md"
-    )
-    with open(history_file_name, "a", encoding="utf-8") as f:
+    global runtime_config
+
+    if runtime_config["history_file"] == "":
+        runtime_config["history_file"] = SCRIPT_DIR.joinpath(
+            f"history/history-{get_current_datetime('%Y%m%d')}.md"
+        )
+
+    with open(runtime_config["history_file"], "a", encoding="utf-8") as f:
         buf = []
+        buf.append(
+            f"----\nmodel: {runtime_config['model']}\ntemperature: {runtime_config['temperature']}\ntop_p: {runtime_config['top_p']}\n----"
+        )
         buf.append("## User")
         buf.append(query)
         buf.append("## Assistant")
@@ -156,53 +178,63 @@ def dump_messages(query, answer_contents, reasoning_contents):
         f.write("\n\n".join(buf))
 
 
+def cut_history():
+    global runtime_config
+    if runtime_config["history_file"]:
+        saved_file = SCRIPT_DIR.joinpath(
+            f"history/history-{get_current_datetime('%Y%m%d-%H%M%S')}.md"
+        )
+        os.rename(runtime_config["history_file"], saved_file)
+        runtime_config["history_file"] = ""
+
+
 async def handle_system_command(query):
     global MEMORY
 
-    cmd_line = query.lower()
+    cmd_line: str = query.lower()
 
     if cmd_line == "/q":
         exit(0)
-    elif cmd_line == "/r":
+
+    if cmd_line == "/r" or cmd_line == "/c":
         MEMORY = []
-        print("[System] clean memory")
+        print("[System] 清空记忆体")
+        # 记录一份历史文件
+        cut_history()
         return True
-    elif cmd_line == "/m qwen2.5":
-        config["model"] = QWEN2_5
-        print(f"[System] using model {QWEN2_5}")
-        return True
-    elif cmd_line == "/m qwen3":
-        config["model"] = QWEN3
-        print(f"[System] using model {QWEN3}")
-        return True
-    elif cmd_line == "/m glm_z1":
-        config["model"] = GLM_Z1
-        print(f"[System] using model {GLM_Z1}")
-        return True
-    elif cmd_line == "/m" or cmd_line == "/m list":
-        print(f"[System] {get_models()}")
-        return True
+
+    if cmd_line.startswith("/m"):
+        args = cmd_line.split(" ")[1:]
+        if len(args) == 0 or args[0] == "list":
+            print(f"[System] {get_models()}")
+            return True
+        model_name = args[0]
+        for x in CONFIG["models"]:
+            if x["name"] == model_name:
+                runtime_config["model"] = x["id"]
+                print(f"[System] using model {x['id']}")
+                return True
 
     return False
 
 
 async def chat_loop():
-    # 清屏
-    print("\033[2J\033[H", end="")
-
-    print("ChatBox CLI v0")
-    print("Type your queries or '/q' to exit.")
-    print(f"Using {config['model']}.\n")
-
     while True:
         try:
             prompt_session = PromptSession()
             with patch_stdout():
-                query = await prompt_session.prompt_async("Query: ")
+                query: str = await prompt_session.prompt_async(">>> ")
 
             query = query.strip()
-            parsed = await handle_system_command(query)
-            if parsed:
+            if query == "":
+                print("[System] 请输入请求")
+                print("----\n")
+                continue
+
+            if query.startswith("/"):
+                parsed = await handle_system_command(query)
+                if not parsed:
+                    print(f"[System] 异常。未知指令：{query}")
                 print("----\n")
                 continue
 
@@ -218,4 +250,21 @@ async def chat_loop():
 
 
 if __name__ == "__main__":
+    with open(CONFIG_PATH, "rb") as f:
+        CONFIG = MappingProxyType(tomllib.load(f))
+
+        # 更新运行时配置
+        runtime_config["api_key"] = CONFIG["api_key"]
+        runtime_config["openai_endpoint"] = CONFIG["openai_endpoint"]
+        runtime_config["temperature"] = CONFIG["temperature"]
+        runtime_config["top_p"] = CONFIG["top_p"]
+        runtime_config["model"] = CONFIG["models"][0]["id"]
+
+    # 清屏
+    print("\033[2J\033[H", end="")
+
+    print("Lyseya v0.0.1")
+    print("请输入问题或 '/q' 退出")
+    print(f"正在使用 {runtime_config['model']}\n")
+
     asyncio.run(chat_loop())
