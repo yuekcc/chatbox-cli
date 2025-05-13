@@ -64,10 +64,11 @@ async def process_query(query):
 
         thinking_tag = ""
 
-        # TODO 支持注入历史 message 实现多轮对话
-        messages = [
-            {"role": "system", "content": get_system_prompt()},
-        ]
+        messages = []
+
+        if len(MEMORY) == 0:
+            messages.append({"role": "system", "content": get_system_prompt()})
+
         messages.append({"role": "user", "content": query})
 
         # 添加记忆
