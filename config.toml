@@ -6,6 +6,7 @@ api_key = 'sk-1234'
 temperature = 0.6
 top_p = 1
 
+
 # 第一个模型会是默认值
 [[models]]
 name = "qwen2.5"
@@ -18,3 +19,7 @@ id = "Qwen/Qwen3-8B"
 [[models]]
 name = "glm_z1"
 id = "THUDM/GLM-Z1-9B-0414"
+
+[[agents]]
+name = 'default'
+prompt = '''You are a powerful agentic AI assistant'''

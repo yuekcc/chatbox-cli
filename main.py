@@ -21,6 +21,7 @@ THINK_END = "</think>\n"
 # 静态配置
 CONFIG = {
     "models": [],
+    "agents": [],
     "temperature": 0.6,
     "top_p": 1,
     "api_key": "",
@@ -34,6 +35,7 @@ runtime_config = {
     "api_key": "",
     "openai_endpoint": "",
     "history_file": "",
+    "system_prompt": "",
 }
 
 MEMORY = []
@@ -45,11 +47,11 @@ def get_current_datetime(format="%Y%m%d%H%M%S"):
 
 def get_base_system_prompt():
     current_date = get_current_datetime("%Y-%m-%d")
-    return f"Current model: {runtime_config['model']}\nCurrent date: {current_date}\nUsing 简体中文"
+    return f"Current model: {runtime_config['model']}\nCurrent date: {current_date}\nUsing language: 简体中文"
 
 
 def get_system_prompt():
-    return f"{get_base_system_prompt()}\n\nYou are a helpful assistant. "
+    return f"{get_base_system_prompt()}\n\n{runtime_config['system_prompt']}"
 
 
 def get_models():
@@ -272,6 +274,7 @@ if __name__ == "__main__":
         runtime_config["temperature"] = CONFIG["temperature"]
         runtime_config["top_p"] = CONFIG["top_p"]
         runtime_config["model"] = CONFIG["models"][0]["id"]
+        runtime_config["system_prompt"] = CONFIG["agents"][0]["prompt"]
 
     # 清屏
     print("\033[2J\033[H", end="")
