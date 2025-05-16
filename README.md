@@ -8,7 +8,7 @@
 
 ```sh
 uv sync
-uv run main.py
+uv run lacia
 ```
 
 ## Roadmap
