@@ -1,4 +1,4 @@
-# Lyseya
+# Lacia
 
 本地优先的 Chat-box，支持 openai 兼容接口。
 
@@ -23,6 +23,7 @@ uv run main.py
 - [ ] 命令 `/agent xxx` 切换系统提示
 - [ ] MCP 支持
 - [x] 支持配置文件
+- [x] 支持 `@filepath 问题` 方式引用文件。只能在开头使用 `@filepath`
 
 ## LICENSE
 

@@ -108,9 +108,9 @@ wheels = [
 ]
 
 [[package]]
-name = "lyseya"
+name = "lacia-cli"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "httpx", extra = ["http2"] },
     { name = "prompt-toolkit" },

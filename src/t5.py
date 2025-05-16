@@ -2,6 +2,7 @@ import asyncio
 import json
 import tomllib
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from types import MappingProxyType
@@ -10,9 +11,9 @@ import httpx
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 
-SCRIPT_PATH = Path(__file__)
-SCRIPT_DIR = SCRIPT_PATH.parent
+SCRIPT_DIR = Path(__file__).parent
 CONFIG_PATH = SCRIPT_DIR.joinpath("config.toml")
+HISTORY_DIR = SCRIPT_DIR.joinpath("history")
 
 
 THINK_START = "<think>\n"
@@ -55,11 +56,12 @@ def get_system_prompt():
 
 
 def get_models():
-    global CONFIG
+    global CONFIG, runtime_config
 
     msgs = ["当前可用模型有："]
     for x in CONFIG["models"]:
-        msgs.append(f"{x['id']} (id={x['name']})")
+        current_tag = "<<< CURRENT" if x["id"] == runtime_config["model"] else ""
+        msgs.append(f"{x['id']} (id={x['name']}) {current_tag}")
 
     return "\n".join(msgs)
 
@@ -77,9 +79,7 @@ def remove_reasoning(messages):
 
 
 async def process_query(query):
-    global MEMORY
-    global CONFIG
-    global runtime_config
+    global MEMORY, CONFIG, runtime_config
 
     async with httpx.AsyncClient(http2=True, timeout=300) as client:
         full_response = ""
@@ -122,7 +122,6 @@ async def process_query(query):
                 if not chunk:
                     break
 
-                # print(f">>>{chunk.strip()}<<<", end="\n", flush=True)
                 striped: str = chunk.strip()
                 full_response += f"{striped}\n"
 
@@ -170,19 +169,23 @@ async def process_query(query):
         return answer_contents, reasoning_contents, full_response
 
 
+def _ensure_history_dir():
+    if HISTORY_DIR.exists():
+        return
+    HISTORY_DIR.mkdir()
+
+
 def dump_messages():
     global runtime_config
 
     if runtime_config["history_file"] == "":
-        runtime_config["history_file"] = SCRIPT_DIR.joinpath(
-            f"history/history-{get_current_datetime('%Y%m%d')}.md"
+        runtime_config["history_file"] = HISTORY_DIR.joinpath(
+            f"history-{get_current_datetime('%Y%m%d')}.md"
         )
 
+    _ensure_history_dir()
     with open(runtime_config["history_file"], "a", encoding="utf-8") as f:
         buf = []
-        # buf.append(
-        #     f"----\nmodel: {runtime_config['model']}\ntemperature: {runtime_config['temperature']}\ntop_p: {runtime_config['top_p']}\n----"
-        # )
 
         for msg in MEMORY:
             buf.append(f"## {msg['role']}")
@@ -196,8 +199,8 @@ def dump_messages():
 def cut_history():
     global runtime_config
     if runtime_config["history_file"]:
-        saved_file = SCRIPT_DIR.joinpath(
-            f"history/history-{get_current_datetime('%Y%m%d-%H%M%S')}.md"
+        saved_file = HISTORY_DIR.joinpath(
+            f"history-{get_current_datetime('%Y%m%d-%H%M%S')}.md"
         )
         os.rename(runtime_config["history_file"], saved_file)
         runtime_config["history_file"] = ""
@@ -233,6 +236,26 @@ async def handle_system_command(query):
     return False
 
 
+def _read_file_content(file_path: str):
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+        return f"file: {file_path} (file content see below which contained by <file_content> tag.)\n<file_content>\n{content}\n</file_content>"
+
+
+def prepare_query(query: str):
+    parts = query.split(" ", maxsplit=1)
+    if len(parts) == 1:
+        return query
+
+    fst, lst = parts
+    if not fst.startswith("@"):
+        return query
+
+    files = fst.replace("@", "", 1).split(",")
+    file_contents = "\n".join(map(lambda x: _read_file_content(x), files))
+    return f"{lst}\n\n{file_contents}".strip()
+
+
 async def chat_loop():
     while True:
         try:
@@ -248,12 +271,11 @@ async def chat_loop():
 
             if query.startswith("/"):
                 parsed = await handle_system_command(query)
-                if not parsed:
-                    print(f"[System] 异常。未知指令：{query}")
-                print("----\n")
-                continue
+                if parsed:
+                    print("----\n")
+                    continue
 
-            await process_query(query)
+            await process_query(prepare_query(query))
             dump_messages()
 
             # LLM 输出的最后没有换行，手工补充换行
@@ -264,7 +286,9 @@ async def chat_loop():
             exit(1)
 
 
-if __name__ == "__main__":
+def main():
+    global CONFIG, runtime_config
+
     with open(CONFIG_PATH, "rb") as f:
         CONFIG = MappingProxyType(tomllib.load(f))
 
@@ -279,8 +303,15 @@ if __name__ == "__main__":
     # 清屏
     print("\033[2J\033[H", end="")
 
-    print("Lyseya v0.0.1")
+    print("Lacia v0")
+    print("----")
+    print(f"工作目录：{os.getcwd()}")
+    print(f"模型：{runtime_config['model']}")
     print("请输入问题或 '/q' 退出")
-    print(f"正在使用 {runtime_config['model']}\n")
+    print()
 
     asyncio.run(chat_loop())
+
+
+if __name__ == "__main__":
+    main()

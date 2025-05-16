@@ -1,10 +1,13 @@
 [project]
-name = "lyseya"
+name = "lacia-cli"
 version = "0.1.0"
-description = "Local first chat box"
+description = "chat box for cli"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "httpx[http2]>=0.28.1",
-    "prompt-toolkit>=3.0.51",
-]
+dependencies = ["httpx[http2]>=0.28.1", "prompt-toolkit>=3.0.51"]
+
+[project.scripts]
+lacia = "t5:main"
+
+[tool.uv]
+package = true
