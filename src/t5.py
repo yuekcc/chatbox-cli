@@ -93,7 +93,7 @@ async def process_query(query):
         if len(MEMORY) == 0:
             messages.append({"role": "system", "content": get_system_prompt()})
 
-        messages.append({"role": "user", "content": query})
+        messages.append(query)
 
         # 添加记忆
         MEMORY = MEMORY + messages
@@ -191,7 +191,19 @@ def dump_messages():
             buf.append(f"## {msg['role']}")
             if "reasoning_content" in msg and msg["reasoning_content"]:
                 buf.append(f"{THINK_START}{msg['reasoning_content']}{THINK_END}")
-            buf.append(msg["content"])
+
+            content = msg["content"]
+            if type(content) is str:
+                buf.append(msg["content"])
+            elif type(content) is list:
+                for content_item in content:
+                    if "type" in content_item and content_item["type"] == "text":
+                        buf.append(content_item["text"])
+            else:
+                print(
+                    "\n[System] unknown message content structure, ignored in dumping message",
+                    content,
+                )
 
         f.write("\n\n".join(buf))
 
@@ -236,24 +248,33 @@ async def handle_system_command(query):
     return False
 
 
-def _read_file_content(file_path: str):
+def _read_file_content(file_path: str, file_index: int):
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
-        return f"file: {file_path} (file content see below which contained by <file_content> tag.)\n<file_content>\n{content}\n</file_content>"
+        return f"<ATTACHMENT_FILE>\n<FILE_INDEX>File {file_index}</FILE_INDEX>\n<FILE_NAME>{file_path}</FILE_NAME>\n<FILE_CONTENT>\n{content}\n</FILE_CONTENT>\n</ATTACHMENT_FILE>"
 
 
 def prepare_query(query: str):
     parts = query.split(" ", maxsplit=1)
     if len(parts) == 1:
-        return query
+        return {"role": "user", "content": query}
 
-    fst, lst = parts
+    fst, main_query = parts
     if not fst.startswith("@"):
-        return query
+        return {"role": "user", "content": query}
 
     files = fst.replace("@", "", 1).split(",")
-    file_contents = "\n".join(map(lambda x: _read_file_content(x), files))
-    return f"{lst}\n\n{file_contents}".strip()
+    file_content = []
+    for file_index, file in enumerate(files):
+        file_content.append(_read_file_content(file, file_index))
+
+    return {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "\n\n".join(file_content)},
+            {"type": "text", "text": main_query},
+        ],
+    }
 
 
 async def chat_loop():
@@ -282,7 +303,7 @@ async def chat_loop():
             print("\n----")
             print(f"[System] Memory size is {len(MEMORY)}\n")
         except Exception as ex:
-            print(f"[System] Error: {str(ex)}")
+            print(f"\n[System] Error: {str(ex)}")
             exit(1)
 
 
