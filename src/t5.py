@@ -266,7 +266,7 @@ def prepare_query(query: str):
     files = fst.replace("@", "", 1).split(",")
     file_content = []
     for file_index, file in enumerate(files):
-        file_content.append(_read_file_content(file, file_index))
+        file_content.append(_read_file_content(file, file_index + 1))
 
     return {
         "role": "user",
