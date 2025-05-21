@@ -24,6 +24,7 @@ uv run lacia
 - [ ] MCP 支持
 - [x] 支持配置文件
 - [x] 支持 `@filepath 问题` 方式引用文件。只能在开头使用 `@filepath`
+- [x] 在启动时通过 `-C workdir` 可以指定工作目录（工作目录会影响 @filepath 指令查找文件）
 
 ## LICENSE
 

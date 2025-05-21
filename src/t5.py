@@ -308,7 +308,7 @@ async def chat_loop():
 
 
 def main():
-    global CONFIG, runtime_config
+    global CONFIG, HISTORY_DIR, runtime_config
 
     with open(CONFIG_PATH, "rb") as f:
         CONFIG = MappingProxyType(tomllib.load(f))
@@ -320,6 +320,15 @@ def main():
         runtime_config["top_p"] = CONFIG["top_p"]
         runtime_config["model"] = CONFIG["models"][0]["id"]
         runtime_config["system_prompt"] = CONFIG["agents"][0]["prompt"]
+
+        if 'history_file' in CONFIG:
+            HISTORY_DIR = Path(CONFIG['history_file'])
+    
+    # 处理 -C 命令行开关
+    if len(sys.argv) >= 3:
+        _, a, b = sys.argv
+        if a == '-C':
+            os.chdir(Path(b))
 
     # 清屏
     print("\033[2J\033[H", end="")

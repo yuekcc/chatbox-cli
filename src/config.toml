@@ -6,15 +6,17 @@ api_key = 'sk-1234'
 temperature = 0.6
 top_p = 1
 
+history_dir = ''
+
 
 # 第一个模型会是默认值
 [[models]]
-name = "qwen2.5"
-id = "Qwen/Qwen2.5-7B-Instruct"
-
-[[models]]
 name = "qwen3"
 id = "Qwen/Qwen3-8B"
+
+[[models]]
+name = "qwen2.5"
+id = "Qwen/Qwen2.5-7B-Instruct"
 
 [[models]]
 name = "glm_z1"
