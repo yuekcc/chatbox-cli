@@ -20,11 +20,17 @@ uv run lacia
 - [x] 命令 `/c` 或 `/r` 清空记忆体
 - [x] 命令 `/m list` 或 `/m` 列出全部可用模型
 - [x] 命令 `/m xxx` 切换模型
-- [ ] 命令 `/agent xxx` 切换系统提示
+- [x] 命令 `/a xxx` 切换系统提示
 - [ ] MCP 支持
 - [x] 支持配置文件
-- [x] 支持 `@filepath 问题` 方式引用文件。只能在开头使用 `@filepath`
+- [x] 支持 `@filepath` 方式引用文件。只能在开头使用 `@`
 - [x] 在启动时通过 `-C workdir` 可以指定工作目录（工作目录会影响 @filepath 指令查找文件）
+
+### 内置工具
+
+- [ ] fetch_file
+- [ ] fetch_web
+- [ ] patch
 
 ## LICENSE
 
