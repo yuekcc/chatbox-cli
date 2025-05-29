@@ -1,15 +1,17 @@
 # Lacia
 
-本地优先的 Chat-box，支持 openai 兼容接口。
+一个命令行中的 AI Agent。
 
 ## 运行
 
-可以配合 [openai-api-forward](https://github.com/yuekcc/openai-api-forward) 使用。需要先安装 [uv](https://github.com/astral-sh/uv)
+需要先安装 [uv](https://github.com/astral-sh/uv)。
 
 ```sh
 uv sync
 uv run lacia
 ```
+
+LLM 接口，只支持 OpenAI 兼容接口。可以配合 [openai-api-forward](https://github.com/yuekcc/openai-api-forward) 使用。
 
 ## Roadmap
 
