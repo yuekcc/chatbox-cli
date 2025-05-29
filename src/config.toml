@@ -25,3 +25,7 @@ id = "THUDM/GLM-Z1-9B-0414"
 [[agents]]
 name = 'default'
 prompt = '''You are a powerful agentic AI assistant'''
+
+[[agents]]
+name = 'codex'
+prompt_file = 'prompts/codex.txt'

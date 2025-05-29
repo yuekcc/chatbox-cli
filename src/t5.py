@@ -37,6 +37,7 @@ runtime_config = {
     "openai_endpoint": "",
     "history_file": "",
     "system_prompt": "",
+    "agent_name": "default",
 }
 
 MEMORY = []
@@ -55,6 +56,11 @@ def get_system_prompt():
     return f"{get_base_system_prompt()}\n\n{runtime_config['system_prompt']}"
 
 
+def read_file(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def get_models():
     global CONFIG, runtime_config
 
@@ -62,6 +68,17 @@ def get_models():
     for x in CONFIG["models"]:
         current_tag = "<<< CURRENT" if x["id"] == runtime_config["model"] else ""
         msgs.append(f"{x['id']} (id={x['name']}) {current_tag}")
+
+    return "\n".join(msgs)
+
+
+def get_agents():
+    global CONFIG, runtime_config
+
+    msgs = ["当前可用 agent 有："]
+    for x in CONFIG["agents"]:
+        current_tag = "<<< CURRENT" if x["name"] == runtime_config["agent_name"] else ""
+        msgs.append(f"{x['name']} (name={x['name']}) {current_tag}")
 
     return "\n".join(msgs)
 
@@ -245,6 +262,30 @@ async def handle_system_command(query):
                 print(f"[System] using model {x['id']}")
                 return True
 
+    if cmd_line.startswith("/a"):
+        args = cmd_line.split(" ")[1:]
+        if len(args) == 0 or args[0] == "list":
+            print(f"[System] {get_agents()}")
+            return True
+        model_name = args[0]
+        for x in CONFIG["agents"]:
+            if x["name"] == model_name:
+                runtime_config["agent_name"] = x["name"]
+                print(f"[System] using agent {x['name']}")
+
+                if "prompt" in x:
+                    runtime_config["system_prompt"] = x["prompt"]
+                elif "prompt_file" in x:
+                    runtime_config["system_prompt"] = read_file(
+                        SCRIPT_DIR.joinpath(x["prompt_file"])
+                    )
+                else:
+                    print(
+                        f"[System] error, no 'prompt' or 'prompt_file' in agent config  {x['name']}"
+                    )
+                    return False
+                return True
+
     return False
 
 
@@ -321,13 +362,13 @@ def main():
         runtime_config["model"] = CONFIG["models"][0]["id"]
         runtime_config["system_prompt"] = CONFIG["agents"][0]["prompt"]
 
-        if 'history_file' in CONFIG:
-            HISTORY_DIR = Path(CONFIG['history_file'])
-    
+        if "history_file" in CONFIG:
+            HISTORY_DIR = Path(CONFIG["history_file"])
+
     # 处理 -C 命令行开关
     if len(sys.argv) >= 3:
         _, a, b = sys.argv
-        if a == '-C':
+        if a == "-C":
             os.chdir(Path(b))
 
     # 清屏
