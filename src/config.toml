@@ -11,13 +11,36 @@ history_dir = ''
 
 # 第一个模型会是默认值
 [[models]]
+name = "qwen3_235b"
+id = "Qwen3-235B-A22B"
+
+[[models]]
+name = "dsv3f"
+id = "DeepSeek-V3-Fast"
+
+[[models]]
+name = "dsv3"
+id = "DeepSeek-V3"
+
+[[models]]
+name = "dsr1"
+id = "DeepSeek-R1"
+
+[[models]]
+name = "qwen2.5_32b"
+id = "Qwen2.5-32B-Instruct"
+
+# siliconflow 免费模型
+[[models]]
 name = "qwen3"
 id = "Qwen/Qwen3-8B"
 
+# siliconflow 免费模型
 [[models]]
 name = "qwen2.5"
 id = "Qwen/Qwen2.5-7B-Instruct"
 
+# siliconflow 免费模型
 [[models]]
 name = "glm_z1"
 id = "THUDM/GLM-Z1-9B-0414"
