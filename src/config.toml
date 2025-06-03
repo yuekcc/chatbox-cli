@@ -51,8 +51,8 @@ prompt = '''You are a powerful agentic AI assistant'''
 
 [[agents]]
 name = 'codex'
-prompt_file = 'prompts/codex.txt'
+prompt_file = 'prompts/codex.md'
 
 [[agents]]
 name = 'roo'
-prompt_file = 'prompts/roocode.txt'
+prompt_file = 'prompts/roocode.md'
