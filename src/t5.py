@@ -95,95 +95,108 @@ def remove_reasoning(messages):
     return result
 
 
-async def process_query(query):
-    global MEMORY, CONFIG, runtime_config
+class QueryProcessor:
+    def __init__(self):
+        self._reset_state()
 
-    async with httpx.AsyncClient(http2=True, timeout=300) as client:
-        full_response = ""
-        reasoning_contents = []
-        answer_contents = []
+    def _reset_state(self):
+        self._full_response = ""
+        self._reasoning_contents = []
+        self._answer_contents = []
+        self._thinking_tag = ""
+        self._messages = []
 
-        thinking_tag = ""
+    async def _parse_chunk(self, chunk):
+        striped: str = chunk.strip()
+        self._full_response += f"{striped}\n"
 
-        messages = []
+        if striped.startswith("data:"):
+            pure_chunk = striped.replace("data: ", "")
 
-        if len(MEMORY) == 0:
-            messages.append({"role": "system", "content": get_system_prompt()})
+        for line in pure_chunk.split("\n"):
+            if line == "" or line == "[DONE]":
+                continue
 
-        messages.append(query)
+            try:
+                json_data = json.loads(line)
+                if "choices" in json_data and len(json_data["choices"]) > 0:
+                    delta = json_data["choices"][0]["delta"]
 
-        # 添加记忆
-        MEMORY = MEMORY + messages
+                    reasoning_content = delta.get("reasoning_content")
+                    answer_content = delta.get("content")
 
-        api_url = f"{runtime_config['openai_endpoint']}/v1/chat/completions"
-        api_key = runtime_config["api_key"]
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        body = {
-            "messages": remove_reasoning(MEMORY),
-            "model": runtime_config["model"],
-            "temperature": runtime_config["temperature"],
-            "top_p": runtime_config["top_p"],
-            "stream": True,
-        }
+                    if reasoning_content:
+                        self._reasoning_contents.append(reasoning_content)
+                        if len(self._reasoning_contents) > 0 and self._thinking_tag == "":
+                            print(THINK_START, end="", flush=True)
+                            self._thinking_tag = THINK_START
+                        print(str(reasoning_content), end="", flush=True)
 
-        async with client.stream(
-            "POST",
-            api_url,
-            headers=headers,
-            json=body,
-        ) as response:
-            async for chunk in response.aiter_text():
-                if not chunk:
-                    break
+                    if answer_content:
+                        self._answer_contents.append(answer_content)
+                        if len(self._answer_contents) > 0 and self._thinking_tag == THINK_START:
+                            print(THINK_END, end="", flush=True)
+                            self._thinking_tag = THINK_END
+                        print(str(answer_content), end="", flush=True)
+            except Exception as ex:
+                print(f"\nError: {str(ex)}")
 
-                striped: str = chunk.strip()
-                full_response += f"{striped}\n"
+    async def _do_query(self, query):
+        global MEMORY, CONFIG, runtime_config
 
-                if striped.startswith("data:"):
-                    pure_chunk = striped.replace("data: ", "")
+        async with httpx.AsyncClient(http2=True, timeout=300) as client:
+            self._messages.append(query)
+            MEMORY = MEMORY + self._messages
 
-                for line in pure_chunk.split("\n"):
-                    if line == "" or line == "[DONE]":
-                        continue
+            api_url = f"{runtime_config['openai_endpoint']}/v1/chat/completions"
+            api_key = runtime_config["api_key"]
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            body = {
+                "messages": remove_reasoning(MEMORY),
+                "model": runtime_config["model"],
+                "temperature": runtime_config["temperature"],
+                "top_p": runtime_config["top_p"],
+                "stream": True,
+            }
 
-                    try:
-                        json_data = json.loads(line)
-                        if "choices" in json_data and len(json_data["choices"]) > 0:
-                            delta = json_data["choices"][0]["delta"]
+            async with client.stream("POST", api_url, headers=headers, json=body) as response:
+                async for chunk in response.aiter_text():
+                    if not chunk:
+                        break
+                    else:
+                        await self._parse_chunk(chunk)
 
-                            reasoning_content = delta.get("reasoning_content")
-                            answer_content = delta.get("content")
-
-                            if reasoning_content:
-                                reasoning_contents.append(reasoning_content)
-                                if len(reasoning_contents) > 0 and thinking_tag == "":
-                                    print(THINK_START, end="", flush=True)
-                                    thinking_tag = THINK_START
-                                print(str(reasoning_content), end="", flush=True)
-
-                            if answer_content:
-                                answer_contents.append(answer_content)
-                                if (
-                                    len(answer_contents) > 0
-                                    and thinking_tag == THINK_START
-                                ):
-                                    print(THINK_END, end="", flush=True)
-                                    thinking_tag = THINK_END
-                                print(str(answer_content), end="", flush=True)
-                    except Exception as ex:
-                        print(f"\nError: {str(ex)}")
-
+    def _record_history(self):
+        global MEMORY, CONFIG, runtime_config
         MEMORY.append(
             {
                 "role": "assistant",
-                "content": "".join(answer_contents).strip(),
-                "reasoning_content": "".join(reasoning_contents),
+                "content": "".join(self._answer_contents).strip(),
+                "reasoning_content": "".join(self._reasoning_contents),
             }
         )
-        return answer_contents, reasoning_contents, full_response
+
+    def _start_auto_drive(self):
+        assistant_reply = "".join(self._answer_contents).strip()
+        # TODO 解析 LLM 返回结果，判断是否要调用 tool
+        return False
+
+    async def handle(self, query):
+        global MEMORY, CONFIG, runtime_config
+
+        if len(MEMORY) == 0:
+            self._messages.append({"role": "system", "content": get_system_prompt()})
+
+        await self._do_query(query)
+        self._record_history()
+
+        if self._start_auto_drive():
+            self._reset_state()
+            # TODO 实现循环调用 LLM
+
 
 
 def _ensure_history_dir():
@@ -196,9 +209,7 @@ def dump_messages():
     global runtime_config
 
     if runtime_config["history_file"] == "":
-        runtime_config["history_file"] = HISTORY_DIR.joinpath(
-            f"history-{get_current_datetime('%Y%m%d')}.md"
-        )
+        runtime_config["history_file"] = HISTORY_DIR.joinpath(f"history-{get_current_datetime('%Y%m%d')}.md")
 
     _ensure_history_dir()
     with open(runtime_config["history_file"], "a", encoding="utf-8") as f:
@@ -228,9 +239,7 @@ def dump_messages():
 def cut_history():
     global runtime_config
     if runtime_config["history_file"]:
-        saved_file = HISTORY_DIR.joinpath(
-            f"history-{get_current_datetime('%Y%m%d-%H%M%S')}.md"
-        )
+        saved_file = HISTORY_DIR.joinpath(f"history-{get_current_datetime('%Y%m%d-%H%M%S')}.md")
         os.rename(runtime_config["history_file"], saved_file)
         runtime_config["history_file"] = ""
 
@@ -276,13 +285,9 @@ async def handle_system_command(query):
                 if "prompt" in x:
                     runtime_config["system_prompt"] = x["prompt"]
                 elif "prompt_file" in x:
-                    runtime_config["system_prompt"] = read_file(
-                        SCRIPT_DIR.joinpath(x["prompt_file"])
-                    )
+                    runtime_config["system_prompt"] = read_file(SCRIPT_DIR.joinpath(x["prompt_file"]))
                 else:
-                    print(
-                        f"[System] error, no 'prompt' or 'prompt_file' in agent config  {x['name']}"
-                    )
+                    print(f"[System] error, no 'prompt' or 'prompt_file' in agent config  {x['name']}")
                     return False
                 return True
 
@@ -337,7 +342,7 @@ async def chat_loop():
                     print("----\n")
                     continue
 
-            await process_query(prepare_query(query))
+            await QueryProcessor().handle(prepare_query(query))
             dump_messages()
 
             # LLM 输出的最后没有换行，手工补充换行
