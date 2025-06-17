@@ -11,3 +11,6 @@ wheels/
 
 /**/history/*.md
 
+/requirements-vendor.txt
+/runtime
+python-3.12.10-embed-amd64.zip
