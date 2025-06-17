@@ -250,7 +250,7 @@ async def handle_system_command(query):
     cmd_line: str = query.lower()
 
     if cmd_line == "/q":
-        exit(0)
+        sys.exit(0)
 
     if cmd_line == "/r" or cmd_line == "/c":
         MEMORY = []
@@ -350,7 +350,7 @@ async def chat_loop():
             print(f"[System] Memory size is {len(MEMORY)}\n")
         except Exception as ex:
             print(f"\n[System] Error: {str(ex)}")
-            exit(1)
+            sys.exit(1)
 
 
 def main():
