@@ -1,0 +1,9 @@
+{
+    "command": "runtime/python.exe",
+    "changeDir": true,
+    "args": [
+        "__main__.py",
+        "-C",
+        "$CWD"
+    ]
+}
