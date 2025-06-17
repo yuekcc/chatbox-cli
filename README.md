@@ -11,6 +11,15 @@ uv sync
 uv run lacia
 ```
 
+## 部署
+
+结合 lacia.exe 和 embed python，可以将 lacia 部署为可直接启动应用。
+
+```
+bash download-python.sh
+bash package.sh
+```
+
 LLM 接口，只支持 OpenAI 兼容接口。可以配合 [openai-api-forward](https://github.com/yuekcc/openai-api-forward) 使用。
 
 ## Roadmap
